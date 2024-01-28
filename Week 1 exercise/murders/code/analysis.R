@@ -1,1 +1,0 @@
-load('../rdas/murders.rda')
