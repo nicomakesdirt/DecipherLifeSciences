@@ -71,6 +71,19 @@ the roots.
 Create a markdown page with the results for this last set of values, but
 this time showing the code.
 
+``` r
+# Solve for and plot a=1, b=3, c=2
+solve_quadratic(1,3,2)
+```
+
+    The solutions are: -1 and -2 
+
+``` r
+plot_quadratic(1,3,2,-3,0)
+```
+
+![](assignment.markdown_github_files/figure-markdown_github/unnamed-chunk-5-1.png)
+
 # Problem 7
 
 Submit the markdown page, including all necessary auxiliary files, and
