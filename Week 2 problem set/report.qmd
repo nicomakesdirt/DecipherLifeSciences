@@ -1,0 +1,104 @@
+---
+title: "Vaccines Report"
+author: "Nico Hawley-Weld"
+format: html
+editor: visual
+date: 2024-02-03
+echo: FALSE
+---
+
+
+```{r}
+# Load packages
+suppressMessages(library(tidyverse))
+suppressMessages(library(dslabs))
+```
+
+The measles vaccine was released in 1963. The chart below shows case rates averaged across all 50 states except for Hawaii and Alaska, dating back to 1928. The `dslabs` data set shows case rate data for the following diseases.
+
+```{r}
+# Display all diseases in the data set
+disease_levels <- us_contagious_diseases |> 
+  pull(disease) |>
+  levels()
+print(disease_levels)
+```
+
+We choose to explore measles. Here is the case rate data averaged across the U.S. by year, showing the first 10 years.
+
+```{r}
+# Filter to measles, excluding Alaska and Hawaii, summarizing rate by year
+avg <- us_contagious_diseases |>
+  filter(disease == "Measles" &
+         !state %in% c("Alaska","Hawaii") &
+         weeks_reporting > 0) |>
+  # mutate(rate = count / (population / 10^5) * (52 / weeks_reporting)) |>
+  group_by(year) |>
+  summarize(rate = sum(count * 52 / weeks_reporting, na.rm=TRUE) / sum(population / 10^5, na.rm=TRUE))
+
+# Display
+head(avg,10) |>
+  mutate(rate = round(rate)) |>
+  knitr::kable(col.names = c("Year", "U.S. Case Rate Per 10,000 People"))
+```
+
+Here we can clearly see a reduction in case rate following the year the measles vaccine was introduced.
+
+```{r}
+# Plot rate vs year
+avg |> 
+  ggplot(aes(year, rate)) +
+    geom_line() +
+    geom_vline(xintercept = 1963, linetype = "dashed") +
+    labs(x="Year", y="Case rate per 10,000 people", title="Rate of measles cases in the United States") +
+    annotate("text", x = 1963, y = max(avg$rate), label = "Introduction of measles vaccine", vjust = 5, hjust = -0.05) +
+    theme_bw() +
+    theme(plot.title = element_text(hjust = 0.5))
+```
+
+It is helpful to see the state by state trendlines in aggregate.
+
+```{r}
+# Update data frame to include case rates by year and state
+avg_by_state <- us_contagious_diseases |>
+  filter(disease == "Measles" &
+         !state %in% c("Alaska", "Hawaii") &
+         weeks_reporting > 0) |>
+  group_by(year, state) |>
+  summarize(rate = sum(count * 52 / weeks_reporting, na.rm = TRUE) / sum(population / 10^5, na.rm = TRUE), .groups = 'drop')
+
+# Take square root of case rate and add state trend lines as layer to plot
+ggplot() + 
+    geom_smooth(data = avg_by_state, aes(year, sqrt(rate), group = state), method = "loess", formula = y ~ x, se = FALSE, color = "grey", span = 0.2) +
+    geom_line(data = avg, aes(year, sqrt(rate))) + 
+    geom_vline(xintercept = 1963, linetype = "dashed") +
+    labs(x="Year", y="Square root of case rate per 10,000 people", title="Rate of measles cases in the United States") +
+    annotate("text", x = 1963, y = sqrt(max(avg$rate)), label = "Introduction of measles vaccine", vjust = 0, hjust = -0.1) +
+    theme_bw() +
+    theme(plot.title = element_text(hjust = 0.5))
+```
+
+A heatmap helps visualize the case rate data by state and year.
+
+```{r}
+# Use this color palette
+reds <- RColorBrewer::brewer.pal(9, "Reds")
+
+# Calculate average rate per state
+state_averages <- avg_by_state |>
+  group_by(state) |>
+  summarize(average_rate = mean(rate, na.rm = TRUE), .groups = 'drop')
+
+# Reorder the state factor in avg_by_state based on the average rate
+avg_by_state$state <- factor(avg_by_state$state, levels = state_averages$state[order(state_averages$average_rate)])
+
+# Create heatmap
+avg_by_state |> ggplot(aes(x = year, y = state, fill = rate)) +
+  geom_tile() +
+  scale_fill_gradientn(colors = reds) +
+  labs(x = "Year", y = "State", fill = "Square root of case rate") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+```
+
+It is evident from the data above that the introduction of the measles vaccine directly precedes reduced rates of measles in the United States. For states with high levels of measles before 1963, the drop off can be visualized with the heat map.
