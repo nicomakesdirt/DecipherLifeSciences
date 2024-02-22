@@ -1,7 +1,7 @@
 ---
 title: "Problem Set 4"
 author: "Nico Hawley-Weld"
-format: markdown_github
+format: html
 editor: visual
 date: 2024-02-21
 ---
