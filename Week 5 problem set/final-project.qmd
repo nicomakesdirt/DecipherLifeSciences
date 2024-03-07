@@ -1,91 +1,58 @@
-Final Project
-================
-Nico Hawley-Weld
-3/6/24
+---
+title: "Final Project"
+author: "Nico Hawley-Weld"
+format: markdown_github
+editor: visual
+date: 2024-03-06
+---
 
 # Final Project
 
-Your task is to build a machine learning algorithm that can predict
-tissue type from gene expression data. To do this we will use the
-Genotype-Tissue Expression (GTEx) project data. These data were
-collected across several centers. You will train on the data was
-processed in center `B1` and will report the accuracy you obtain in the
-other centers. In cases where other centers include a tissue not
-represented in `B1`, you can exclude it from the testing. You can only
-use `B1` to train.
+Your task is to build a machine learning algorithm that can predict tissue type from gene expression data. To do this we will use the Genotype-Tissue Expression (GTEx) project data. These data were collected across several centers. You will train on the data was processed in center `B1` and will report the accuracy you obtain in the other centers. In cases where other centers include a tissue not represented in `B1`, you can exclude it from the testing. You can only use `B1` to train.
 
-We start with some data wrangling and provide some guidance. However
-once the data is organized you will be on your own designing an
-algorithm.
+We start with some data wrangling and provide some guidance. However once the data is organized you will be on your own designing an algorithm.
 
-To accomplish this project you will be using all the skills you used
-during the course.
+To accomplish this project you will be using all the skills you used during the course.
 
 ## Data and metadata files
 
-We have downloaded files from the GTEX project that include both gene
-expression counts obtained from thousands of samples processed in
-RNA-Seq experiments and a sample annotation file describing each sample.
-Exploring the files on our Unix system we can start to understand how
-the data is organized explore the data:
+We have downloaded files from the GTEX project that include both gene expression counts obtained from thousands of samples processed in RNA-Seq experiments and a sample annotation file describing each sample. Exploring the files on our Unix system we can start to understand how the data is organized explore the data:
 
-``` r
+```{r}
 list.files("gtex/metadata")
 ```
 
-    [1] "GTEx_Analysis_v8_Annotations_SampleAttributesDD.xlsx" 
-    [2] "GTEx_Analysis_v8_Annotations_SampleAttributesDS.txt"  
-    [3] "GTEx_Analysis_v8_Annotations_SubjectPhenotypesDD.xlsx"
-    [4] "GTEx_Analysis_v8_Annotations_SubjectPhenotypesDS.txt" 
+1.  Read the sample annotation files using the `fread` function from **data.table** as it is very fast. Call the object `pd` for phenotype data.
 
-1.  Read the sample annotation files using the `fread` function from
-    **data.table** as it is very fast. Call the object `pd` for
-    phenotype data.
-
-``` r
+```{r}
 suppressMessages(library(data.table))
 pd <- fread("gtex/metadata/GTEx_Analysis_v8_Annotations_SampleAttributesDS.txt")
 ```
 
-1.  Read the annotation on subjects. Note subjects might contribute more
-    than one sample:
+2.  Read the annotation on subjects. Note subjects might contribute more than one sample:
 
-``` r
+```{r}
 subjects <- fread("gtex/metadata/GTEx_Analysis_v8_Annotations_SubjectPhenotypesDS.txt")
 ```
 
-1.  Join subjects with sample annotation. To connect them we need to
-    extract the subject ID from the sample ID in `pd`. Add a new
-    variable to the `pd` data frame called `SUBJID` with the subject ID.
+3.  Join subjects with sample annotation. To connect them we need to extract the subject ID from the sample ID in `pd`. Add a new variable to the `pd` data frame called `SUBJID` with the subject ID.
 
-``` r
+```{r}
 pd$SUBJID <- gsub("(\\w+-\\w+).*", "\\1", pd$SAMPID)
 pd <- merge(pd, subjects, by = "SUBJID", all.x = TRUE)
 ```
 
-1.  The expression data is stored in gct files
+4.  The expression data is stored in gct files
 
-``` r
+```{r}
 head(list.files("gtex/gene_read_counts_by_tissue"))
 ```
 
-    [1] "gene_reads_2017-06-05_v8_adipose_subcutaneous.gct"    
-    [2] "gene_reads_2017-06-05_v8_adipose_visceral_omentum.gct"
-    [3] "gene_reads_2017-06-05_v8_adrenal_gland.gct"           
-    [4] "gene_reads_2017-06-05_v8_artery_aorta.gct"            
-    [5] "gene_reads_2017-06-05_v8_artery_coronary.gct"         
-    [6] "gene_reads_2017-06-05_v8_artery_tibial.gct"           
+If you look at these, say with `less`, you will notice that the first two lines are information about the files and then it's a tab delimited file. We also notice that the first three columns are a row id, a gene id, and a gene symbol.
 
-If you look at these, say with `less`, you will notice that the first
-two lines are information about the files and then it’s a tab delimited
-file. We also notice that the first three columns are a row id, a gene
-id, and a gene symbol.
+Read the files in one by one. Because we know we will be merging them, remove the gene id and gene symbol. We will later create a table to match ids to genes. Read all those files in.
 
-Read the files in one by one. Because we know we will be merging them,
-remove the gene id and gene symbol. We will later create a table to
-match ids to genes. Read all those files in.
-
-``` r
+```{r}
 # We remove the gene name and gene description
 fnames <- list.files("gtex/gene_read_counts_by_tissue", full.name = TRUE)
 tables <- lapply(fnames, function(fn) {
@@ -95,52 +62,42 @@ tables <- lapply(fnames, function(fn) {
 })
 ```
 
-1.  Now we are going to join all those tables into one big one. We will
-    make sure that the rows match by using `merge` (**data.table**’s
-    join). This is overkill here because the GTEX project made sure that
-    the rows were ordered the same way, but we will merge by `id` just
-    to be sure. Hint: use the `Reduce` function.
+5.  Now we are going to join all those tables into one big one. We will make sure that the rows match by using `merge` (**data.table**'s join). This is overkill here because the GTEX project made sure that the rows were ordered the same way, but we will merge by `id` just to be sure. Hint: use the `Reduce` function.
 
-``` r
+```{r}
 # x <- do.call(cbind, tables)
 x <- Reduce(function(x, y) merge(x, y, by = "id", all = TRUE), tables)
 rm(fnames, tables)
 ```
 
-1.  Create a data frame with just the gene information.
+6.  Create a data frame with just the gene information.
 
-``` r
+```{r}
 # x already has just the gene id and expression data
 # Now we check that all columns in x have sample IDs in pd
 all(colnames(x[, -1, drop = FALSE]) %in% pd$SAMPID)
 ```
 
-    [1] TRUE
+7.  Make sure the `pd` table is in the same order as the columns of `x`.
 
-1.  Make sure the `pd` table is in the same order as the columns of `x`.
-
-``` r
+```{r}
 # We reorder the rows of pd to match columns of x and remove the 24% of phenotypic observations that don't have gene expression data
 pd <- pd[match(colnames(x[, -1, drop = FALSE]), pd$SAMPID), ] 
 ```
 
-1.  Now that everything is in the right order, remove the `id` from x so
-    we can create a numeric matrix.
+8.  Now that everything is in the right order, remove the `id` from x so we can create a numeric matrix.
 
-``` r
+```{r}
 x <- x[, -1, drop = FALSE]
 ```
 
 ## Predict tissue type
 
-You now have the predictors in `x` and all the sample information in
-`pd`. Divide both `x` and `pd` into training and test. Build your
-algorithm on the `B1` center and show your accuracy in the rest.
+You now have the predictors in `x` and all the sample information in `pd`. Divide both `x` and `pd` into training and test. Build your algorithm on the `B1` center and show your accuracy in the rest.
 
-First we define the train and test sets, and save the datasets so they
-can be reloaded.
+First we define the train and test sets, and save the datasets so they can be reloaded.
 
-``` r
+```{r}
 # Define x
 x_train <- as.matrix(x)[, pd$SMCENTER == "B1"]
 x_test <- as.matrix(x)[, pd$SMCENTER != "B1"]
@@ -158,14 +115,9 @@ y_test <- as.factor(pd$SMTS[pd$SMCENTER != "B1"])
 rm(x, subjects)
 ```
 
-There are 30 tissue types, 56,200 genes, and 17,382 samples, 10,635 of
-which are in the training set. This means that for the training set,
-there are 56,200 genes across an average of 355 samples per tissue type.
-For expediency we now create a minimal training and test set across a
-subset of x and y, capturing just 6 tissue types instead of 30. We find
-the most balanced minimal training set.
+There are 30 tissue types, 56,200 genes, and 17,382 samples, 10,635 of which are in the training set. This means that for the training set, there are 56,200 genes across an average of 355 samples per tissue type. For expediency we now create a minimal training and test set across a subset of x and y, capturing just 6 tissue types instead of 30. We find the most balanced minimal training set.
 
-``` r
+```{r}
 # Pick a subset of n tissues to form a minimal, balanced training set with the lowest standard deviation between tissue type counts
 subset_data <- function(n) {
   counts <- table(y_train)
@@ -195,36 +147,21 @@ for (i in 2:30) {
 plot(training_size, xlab = "Number of tissues",
                     ylab = "Training set size",
                     main = "Training set size")
-```
-
-![](final-project.markdown_github_files/figure-markdown_github/unnamed-chunk-12-1.png)
-
-``` r
 plot(sdev, xlab = "Number of tissues",
                     ylab = "Standard deviation of gene counts",
                     main = "Standard deviation of gene counts")
-```
 
-![](final-project.markdown_github_files/figure-markdown_github/unnamed-chunk-12-2.png)
-
-``` r
 # Clean up workspace
 rm(output, i, sdev, training_size)
 ```
 
-We see choose 6 tissue types because there is a dip in training set size
-compared to 5.
+We see choose 6 tissue types because there is a dip in training set size compared to 5.
 
-``` r
+```{r}
 # Extract 6 tissues of interest
 tissue_levels <- subset_data(6)$levels
 print(tissue_levels)
-```
 
-    [1] "Vagina"         "Uterus"         "Ovary"          "Liver"         
-    [5] "Pituitary"      "Salivary Gland"
-
-``` r
 # Create balanced sets
 ind <- which(y_train %in% tissue_levels)
 x_train_small <- x_train[, ind]
@@ -237,11 +174,9 @@ y_test_small <- as.factor(as.character(y_test)[ind])
 rm(ind, subset_data, tissue_levels)
 ```
 
-Having selected our minimal training and test sets, we clean up the
-workspace further and take the transpose of x so that we can run the
-caret package as usual.
+Having selected our minimal training and test sets, we clean up the workspace further and take the transpose of x so that we can run the caret package as usual.
 
-``` r
+```{r}
 # Transpose and rename
 rm(x_test, x_train, y_test, y_train)
 x <- t(x_train_small)
@@ -257,10 +192,9 @@ if (file.exists("workspace.RData")) {
 }
 ```
 
-Now we can train. First, we define gene ids (starting at 0) and remove
-genes with near zero variance.
+Now we can train. First, we define gene ids (starting at 0) and remove genes with near zero variance.
 
-``` r
+```{r}
 # Define row names to equal id's
 colnames(x) <- 0:(ncol(x)-1)
 colnames(x_test) <- 0:(ncol(x_test)-1)
@@ -272,20 +206,13 @@ col_index <- setdiff(1:ncol(x), nzv)
 rm(nzv)
 ```
 
-We now run four different models wih PCA uwing parallelization. We find
-that only the knn model runs without any errors. The other three report
-a warning message.
+We now run four different models wih PCA uwing parallelization. We find that only the knn model runs without any errors. The other three report a warning message.
 
-``` r
+```{r}
 # Initialize parallelization
 suppressMessages(library(doParallel))
 n_cores <- detectCores()
 print(n_cores)
-```
-
-    [1] 8
-
-``` r
 registerDoParallel(cores = n_cores - 1)
 
 # Define knn with PCA
@@ -419,12 +346,6 @@ control <- trainControl(method = "cv", number = 10, p = .9)
 system.time(train_knn_pca <- train(x[, col_index], y, method = knn_pca, 
               tuneGrid = expand.grid(dims = c(15,30), k = seq(3,15,2)),
               trControl = control))
-```
-
-         user    system   elapsed 
-    10161.869   178.598  1631.676 
-
-``` r
 # system.time(train_knn_lda2 <- train(x[, col_index], y, method = lda2_pca, 
 #             tuneGrid = expand.grid(dims = c(15,30), dimen = c(3,5)),
 #             trControl = control))
@@ -446,6 +367,3 @@ y_hat_knn_pca <- predict(fit_knn_pca, newdata, type = "class")
 cm_pca <- confusionMatrix(y_hat_knn_pca, y_test)
 cm_pca$overall["Accuracy"]
 ```
-
-     Accuracy 
-    0.9351351 
